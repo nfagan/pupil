@@ -119,31 +119,36 @@ assert( all(exists), 'Could not locate "%s".', strjoin(names, ' | ') );
 cued = where( evts, 'cued' );
 diffs = evts.data(:, inds(1)) - evts.data(:, inds(2));
 
+delays = cell( shape(evts, 1), 1 );
 subset_ind = diffs > 0 & cued;
-
-delays = get_delay_strict( diffs, subset_ind, possible_delays );
-delays = get_delay_approx( diffs, subset_ind, possible_delays );
-
-end
-
-function delays = get_delay_approx(diffs, subset_ind, possible_delays)
-
-delays = cell( size(subset_ind) );
 
 subsets = diffs( subset_ind );
 [grps, ~, ic] = uniquetol( subsets, 0.1 );
 
-undefdelay = 'undefined-delay';
+end
 
-d = 10;
+function delays = get_delay_strict(subsets, subset_ind)
+
+
+
 
 end
 
-function delays = get_delay_strict(diffs, subset_ind, possible_delays)
+function delays = get_delays_strict(evts, key)
 
-delays = cell( size(subset_ind) );
+names = { 'rwdOn', 'targOn' };
+[exists, inds] = ismember( names, key );
+possible_delays = 0.2:0.2:0.8;
 
-subsets = diffs( subset_ind );
+assert( all(exists), 'Could not locate "%s".', strjoin(names, ' | ') );
+
+cued = where( evts, 'cued' );
+diffs = evts.data(:, inds(1)) - evts.data(:, inds(2));
+
+delays = cell( shape(evts, 1), 1 );
+subset_ind = diffs > 0 & cued;
+
+subsets = diffs( diffs > 0 & cued );
 [grps, ~, ic] = uniquetol( subsets, 0.1 );
 
 undefdelay = 'undefined-delay';
@@ -166,6 +171,5 @@ for i = 1:numel(grps)
 end
 
 delays(~subset_ind) = { undefdelay };
-
 
 end
