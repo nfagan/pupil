@@ -1,4 +1,4 @@
-function [opupil, t, omeans] = align_data_olga( gaze, events, event_key, event_name, start, stop, fs )
+function [opupil, t, omeans, delay_starts] = align_data_olga( gaze, events, event_key, event_name, start, stop, fs )
 
 match_each = { 'days', 'sessions', 'blocks' };
 
@@ -66,7 +66,7 @@ for i = 1:numel(I)
     
     [aligned, t] = pupil.align_pupil( target_evt, pupil_t, pupil_size, start, stop, fs );    
     
-    delays = get_delays( evts_, event_key );
+    [delays, delay_starts] = get_delays( evts_, event_key );
     evts_ = add_field( evts_, 'delays', delays );
     
     n_samples = zeros( size(pupil_t, 1), 1 );
@@ -108,7 +108,7 @@ for i = 1:numel(I)
 end
 end
 
-function delays = get_delays(evts, key)
+function [delays, grps] = get_delays(evts, key)
 
 names = { 'rwdOn', 'targOn' };
 [exists, inds] = ismember( names, key );
@@ -121,25 +121,42 @@ diffs = evts.data(:, inds(1)) - evts.data(:, inds(2));
 
 subset_ind = diffs > 0 & cued;
 
-delays = get_delay_strict( diffs, subset_ind, possible_delays );
-delays = get_delay_approx( diffs, subset_ind, possible_delays );
+% delays = get_delay_strict( diffs, subset_ind, possible_delays );
+[delays, grps] = get_delay_approx( diffs, subset_ind, possible_delays );
 
 end
 
-function delays = get_delay_approx(diffs, subset_ind, possible_delays)
-
-delays = cell( size(subset_ind) );
-
-subsets = diffs( subset_ind );
-[grps, ~, ic] = uniquetol( subsets, 0.1 );
+function [delays, grps] = get_delay_approx(diffs, subset_ind, possible_delays)
 
 undefdelay = 'undefined-delay';
 
-d = 10;
+delays = cell( size(subset_ind) );
+
+grps = [ 0.16, 0.38, 0.58, 0.78, 0.98 ];
+delay_names = { 'short-delay', 'med-delay', 'long-delay', 'long-long-delay' };
+
+assert( numel(delay_names) == numel(grps)-1 );
+
+rest = true( size(subset_ind) );
+
+for i = 1:numel(grps)-1
+  ind = diffs >= grps(i) & diffs < grps(i+1) & subset_ind;
+  
+  delays(ind) = delay_names(i);
+  rest(ind) = false;
+end
+
+delays(rest) = { undefdelay };
+
+missing = subset_ind & rest;
+
+if ( sum(missing) > 0 )
+  warning( '%d were not labeled correctly.', full(sum(missing)) );
+end
 
 end
 
-function delays = get_delay_strict(diffs, subset_ind, possible_delays)
+function [delays, grps] = get_delay_strict(diffs, subset_ind, possible_delays)
 
 delays = cell( size(subset_ind) );
 

@@ -61,7 +61,7 @@ ostop_b = 0;
 
 %   if we don't yet have data for this epoch
 if ( ~processed_already.isKey(processed_string) )
-  [op, ot, omeans] = pupil.align_data_olga( gaze, events, event_key, oevt, start, stop, fs );
+  [op, ot, omeans, delay_starts] = pupil.align_data_olga( gaze, events, event_key, oevt, start, stop, fs );
   [op_b, ot_b] = pupil.align_data_olga( gaze, events, event_key, oevt_b, ostart_b, ostop_b, fs );
 
   op.data = (op.data - omin) / (omax-omin);
@@ -128,5 +128,7 @@ plt = plt.collapse( {'drugs', 'monkeys'} );
 store_data = append( store_data, plt );
 
 end
+
+params.delays = delay_starts;
 
 end
