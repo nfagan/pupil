@@ -1,0 +1,148 @@
+function [opupil, t, omeans] = align_data_olga( gaze, events, event_key, event_name, start, stop, fs )
+
+match_each = { 'days', 'sessions', 'blocks' };
+
+[I, C] = gaze.get_indices( match_each );
+
+opupil = Container();
+omeans = Container();
+
+event_ind = strcmp( event_key, event_name );
+assert( sum(event_ind) == 1, 'No events matched "%s".', event_name );
+
+first_loop = true;
+
+omin = -2^16 / 2;
+omax = 2^16 / 2;
+
+for i = 1:numel(I)
+  fprintf( '\n %d of %d', i, numel(I) );
+  
+  gaze_one_block = gaze(I{i});
+  evts = events(C(i, :));
+  
+  px = gaze_one_block({'px'});
+  pt = gaze_one_block({'pt'});
+  
+  assert( shapes_match(px, pt), 'Pupil times do not match pupil data.' );
+  
+  if ( shape(px, 1) == 1 )
+    assert( shapes_match(px.data{1}, pt.data{1}) && ...
+        shape(px.data{1}, 1) == shape(evts, 1) ...
+        , 'Pupil data does not match event data.' );
+  else
+    px_sz = cellfun( @(x) shape(x, 1), px.data );
+    pt_sz = cellfun( @(x) shape(x, 1), pt.data );
+    assert( all(px_sz == pt_sz) && sum(px_sz(:)) == shape(evts, 1), ...
+      'Pupil data does not match event data.' );
+  end
+  
+  stp = 1;
+  
+  for j = 1:shape(px, 1)
+    px_ = px.data{j};
+    pt_ = pt.data{j};
+    
+    evt_ind = stp:stp+shape(px_, 1)-1; 
+    
+    evts_ = evts(evt_ind);
+    
+    stp = stp + shape(px_, 1);
+    
+    pupil_size = px_.data;
+    pupil_t = pt_.data;
+    evt_data = evts_.data;
+    
+    pupil_size(:, 1) = [];
+    pupil_t(:, 1) = [];
+    
+    target_evt = evt_data(:, event_ind);
+    trial_start = evt_data(:, strcmp(event_key, 'fixOn'));
+    
+    target_evt( target_evt == 0 ) = NaN;
+    trial_start( trial_start == 0 ) = NaN;
+    
+    target_evt = target_evt - trial_start;
+    
+    [aligned, t] = pupil.align_pupil( target_evt, pupil_t, pupil_size, start, stop, fs );    
+    
+    delays = get_delays( evts_, event_key );
+    evts_ = add_field( evts_, 'delays', delays );
+    
+    n_samples = zeros( size(pupil_t, 1), 1 );
+    for k = 1:numel(n_samples)
+      end_t = find( pupil_t(k, :) == 0, 1, 'first' );
+      if ( isempty(end_t) )
+        end_t = size(pupil_t, 2);
+      end
+      n_samples(k) = end_t;
+    end
+    
+    c_pupil_size = (pupil_size - omin) ./ (omax-omin);
+    per_trial_mean = nanmean( c_pupil_size, 2 );    
+    
+    if ( first_loop )
+      first_loop = false;
+    else
+      if ( size(aligned, 2) ~= shape(opupil, 2) )
+        fprintf( '\n Sizes didn''t match.' );
+        assert( size(aligned, 2) < shape(opupil, 2), 'Size were inconsistent.' );
+        matched = find( last_t == t(1), 1, 'first' );
+        assert( ~isempty(matched), 'Incorrect time vector.' );
+        if ( matched == 1 )
+          assert( numel(last_t) - matched + 1 == size(aligned, 2), 'Incorrect time vector.' );
+          aligned = [ nan(size(aligned, 1), matched-1), aligned ];
+        else
+          matched = find( last_t == t(end), 1, 'last' );
+          assert( ~isempty(matched), 'Incorrect time vector.' );
+          aligned = [ aligned, nan(size(aligned, 1), numel(last_t)-matched+1) ];
+        end
+      end
+    end
+
+    opupil = opupil.append( set_data(evts_, aligned) );
+    omeans = omeans.append( set_data(evts_, [per_trial_mean, n_samples]) );
+
+    last_t = t;
+  end
+end
+end
+
+function delays = get_delays(evts, key)
+
+names = { 'rwdOn', 'targOn' };
+[exists, inds] = ismember( names, key );
+
+assert( all(exists), 'Could not locate "%s".', strjoin(names, ' | ') );
+
+cued = where( evts, 'cued' );
+diffs = evts.data(:, inds(1)) - evts.data(:, inds(2));
+
+delays = cell( shape(evts, 1), 1 );
+subset_ind = diffs > 0 & cued;
+
+subsets = diffs( diffs > 0 & cued );
+[grps, ~, ic] = uniquetol( subsets, 0.1 );
+
+undefdelay = 'undefined-delay';
+
+try
+  assert( numel(grps) == 4, 'Expected 4 groups; got %d', numel(grps) );
+catch err
+  delays(:) = { undefdelay };
+  warning( err.message );
+  return;
+end
+
+delay_names = { 'short-delay', 'med-delay', 'long-delay', 'long-long-delay' };
+
+for i = 1:numel(grps)
+  full_ind = subset_ind;
+  full_ind(ic ~= i) = false;
+  
+  delays(full_ind) = delay_names(i);
+end
+
+delays(~subset_ind) = { undefdelay };
+
+end
