@@ -1,8 +1,6 @@
 function add_depends()
 
-depdir = fullfile( pupil.get_dependsdir() ); 
-files = dir( fullfile(depdir, '*.mat') );
-files = { files(:).name };
+[files, depdir] = pupil.get_dependfiles();
 
 for i = 1:numel(files)
   s = load( fullfile(depdir, files{i}) );

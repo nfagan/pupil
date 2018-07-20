@@ -1,5 +1,12 @@
 function dr = get_dataroot()
 
+%   GET_DATAROOT -- Get absolute path to data root folder.
+%
+%     Define the root data folder with `pupil.def_dataroot()`
+%
+%     OUT:
+%       - `dr` (char)
+
 rootfile = 'dataroot.mat';
 fname = fullfile( pupil.get_pathsdir(), rootfile );
 
